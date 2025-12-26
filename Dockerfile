@@ -23,6 +23,12 @@ RUN python3 -m pip install runpod
 
 RUN python3 -m pip cache purge
 
+# Pre-download the model during build to avoid timeout during initialization
+RUN python3 -c "from diffusers import QwenImageLayeredPipeline; import torch; \
+    print('Downloading Qwen-Image-Layered model...'); \
+    QwenImageLayeredPipeline.from_pretrained('Qwen/Qwen-Image-Layered', torch_dtype=torch.float16); \
+    print('Model download complete!')"
+
 # Copy handler
 COPY handler.py /workspace/handler.py
 
