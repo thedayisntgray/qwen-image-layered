@@ -1,4 +1,4 @@
-# RunPod Serverless Dockerfile for Qwen-Image
+# RunPod Serverless Dockerfile for Qwen-Image-Layered
 FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
 # Set working directory
@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y \
 
 RUN python3 -m pip install --upgrade pip
 
+# Install diffusers from GitHub for latest version (required for QwenImageLayeredPipeline)
 RUN python3 -m pip install git+https://github.com/huggingface/diffusers
-RUN python3 -m pip install transformers accelerate safetensors
+RUN python3 -m pip install transformers>=4.51.3 accelerate safetensors
 RUN python3 -m pip install hf-transfer
 
-RUN python3 -m pip install pillow
+# Install required dependencies for Qwen-Image-Layered
+RUN python3 -m pip install pillow python-pptx
 
 RUN python3 -m pip install runpod
 

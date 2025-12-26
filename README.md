@@ -1,14 +1,15 @@
-# Qwen-Image Fast-API
+# Qwen-Image-Layered API
 
-[![RunPod](https://api.runpod.io/badge/arkodeepsen/qwen-image)](https://console.runpod.io/hub/arkodeepsen/qwen-image)
+[![RunPod](https://api.runpod.io/badge/username/qwen-image-layered)](https://console.runpod.io/hub/username/qwen-image-layered)
 
-[![One-Click Pod Deployment](https://cdn.prod.website-files.com/67d20fb9f56ff2ec6a7a657d/685b44aed6fc50d169003af4_banner-runpod.webp)](https://console.runpod.io/deploy?template=wqf5o3topx&ref=az0kmnor)
+[![One-Click Pod Deployment](https://cdn.prod.website-files.com/67d20fb9f56ff2ec6a7a657d/685b44aed6fc50d169003af4_banner-runpod.webp)](https://console.runpod.io/deploy?template=YOUR_TEMPLATE_ID)
 
-A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a powerful text-to-image generation model with superior text rendering capabilities in both English and Chinese.
+A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image-Layered model - an advanced image decomposition model that breaks down images into multiple RGBA layers for independent manipulation and high-fidelity editing.
 
 ## Features
 
-- **Official Qwen-Image Model** - 20B MMDiT image foundation model
+- **Layer Decomposition** - Decomposes images into 3-8 RGBA layers
+- **Independent Manipulation** - Each layer can be edited separately (resize, reposition, recolor)
 - **GPU Optimized** - Runs on A100 80GB, H100 PCIe, H100 HBM3, H100 NVL, and high-end workstation GPUs
 - **Auto-scaling** - Scales to 0 when idle to save costs
 - **Network Volume Storage** - Model cached persistently across all workers
@@ -16,12 +17,12 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 
 ## Model Specifications
 
-- **Model**: `Qwen/Qwen-Image` (20B parameters)
+- **Model**: `Qwen/Qwen-Image-Layered`
 - **Recommended VRAM**: 80GB (A100/H100 recommended)
 - **Precision**: bfloat16 (CUDA) / float32 (CPU)
-- **Default Resolution**: 1024x1024
-- **Text Rendering**: Exceptional quality for both English and Chinese text
-- **License**: Apache 2.0
+- **Recommended Resolution**: 640x640
+- **Output**: Multiple RGBA layers with transparency
+- **License**: Check official repository
 
 ## API Usage
 
@@ -30,12 +31,15 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 ```json
 {
   "input": {
-    "prompt": "Your image description here",
-    "negative_prompt": " ",
-    "width": 1024,
-    "height": 1024,
+    "image": "base64_encoded_image_data",
+    "layers": 4,
+    "prompt": "optional text prompt for guided decomposition",
+    "negative_prompt": "",
     "num_inference_steps": 50,
     "true_cfg_scale": 4.0,
+    "resolution": 640,
+    "cfg_normalize": true,
+    "use_en_prompt": true,
     "seed": null
   }
 }
@@ -45,20 +49,35 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `prompt` | string | **required** | Description of the image to generate |
-| `negative_prompt` | string | `" "` | What to avoid in the image |
-| `width` | integer | `1024` | Image width (pixels) |
-| `height` | integer | `1024` | Image height (pixels) |
-| `num_inference_steps` | integer | `50` | Number of denoising steps (higher = better quality, slower) |
+| `image` | string | **required** | Base64 encoded input image |
+| `layers` | integer | `4` | Number of layers to decompose into (3-8 recommended) |
+| `prompt` | string | `null` | Optional text prompt for guided decomposition |
+| `negative_prompt` | string | `""` | What to avoid in decomposition |
+| `num_inference_steps` | integer | `50` | Number of denoising steps |
 | `true_cfg_scale` | float | `4.0` | Classifier-free guidance scale |
-| `seed` | integer | `null` | Random seed for reproducibility (optional) |
+| `resolution` | integer | `640` | Processing resolution (640 recommended) |
+| `cfg_normalize` | boolean | `true` | Enable CFG normalization |
+| `use_en_prompt` | boolean | `true` | Use English prompts |
+| `seed` | integer | `null` | Random seed for reproducibility |
 
 ### Output Format
 
 ```json
 {
-  "image": "base64_encoded_png_data",
-  "seed": 12345
+  "layers": [
+    {
+      "image": "base64_encoded_rgba_png",
+      "mode": "RGBA",
+      "size": [640, 640]
+    },
+    {
+      "image": "base64_encoded_rgba_png",
+      "mode": "RGBA",
+      "size": [640, 640]
+    }
+  ],
+  "seed": 12345,
+  "num_layers": 4
 }
 ```
 
@@ -74,11 +93,15 @@ runpod.api_key = "your_api_key_here"
 
 endpoint = runpod.Endpoint("YOUR_ENDPOINT_ID")
 
+# Load and encode input image
+with open("input.jpg", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
 request = {
     "input": {
-        "prompt": "A serene mountain landscape with Chinese calligraphy 'Harmony'",
-        "width": 1024,
-        "height": 1024,
+        "image": image_b64,
+        "layers": 4,
+        "resolution": 640,
         "num_inference_steps": 50,
         "seed": 42
     }
@@ -86,36 +109,52 @@ request = {
 
 run = endpoint.run_sync(request)
 
-# Decode and save image
-img_data = base64.b64decode(run['image'])
-image = Image.open(io.BytesIO(img_data))
-image.save('output.png')
+# Save each layer
+for i, layer in enumerate(run['layers']):
+    img_data = base64.b64decode(layer['image'])
+    image = Image.open(io.BytesIO(img_data))
+    image.save(f'layer_{i}.png')
+    print(f"Saved layer {i}: {layer['mode']} {layer['size']}")
 
-print(f"Generated with seed: {run['seed']}")
+print(f"Decomposed into {run['num_layers']} layers with seed: {run['seed']}")
 ```
 
 ### Example Request (cURL)
 
 ```bash
+# First encode your image to base64
+base64 -i input.jpg -o image.b64
+
+# Then make the request
 curl -X POST https://api.runpod.ai/v2/YOUR_ENDPOINT_ID/runsync \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "input": {
-      "prompt": "A futuristic cityscape at sunset",
-      "width": 1024,
-      "height": 1024,
+      "image": "'$(cat image.b64)'",
+      "layers": 4,
+      "resolution": 640,
       "num_inference_steps": 50
     }
   }'
 ```
+
+## Alternative API Server
+
+The repository includes `runpod_startup.sh` which sets up a FastAPI server with additional endpoints:
+
+- `POST /decompose` - Synchronous layer decomposition
+- `POST /decompose_async` - Asynchronous decomposition with job tracking
+- `POST /decompose_file` - Direct file upload endpoint
+- `GET /status/{job_id}` - Check async job status
+- `GET /result/{job_id}` - Get async job results
 
 ## Deployment Configuration
 
 The template is configured with optimal settings in `runpod.toml`:
 
 - **GPU Types**: A100 80GB PCIe, H100 PCIe, H100 HBM3, H100 NVL, RTX 6000 Blackwell, RTX 6000 Blackwell Workstation, RTX Pro 6000 Max-Q Workstation
-- **Recommended VRAM**: 80GB
+- **Minimum VRAM**: 80GB
 - **Container Disk**: 5GB (code + dependencies)
 - **Network Volume**: ~100GB (persistent model storage) - **⚠️ REQUIRED**
 - **Workers**: 0-3 (auto-scaling)
@@ -125,7 +164,7 @@ The template is configured with optimal settings in `runpod.toml`:
 
 **You MUST attach a network volume (~100GB) when deploying this endpoint.**
 
-The Qwen-Image model is ~57GB and requires significant disk space. Without a network volume:
+The Qwen-Image-Layered model requires significant disk space. Without a network volume:
 - ❌ Deployment will fail due to insufficient disk space
 - ❌ Model cannot be downloaded or cached
 - ❌ Workers will crash during initialization
@@ -135,23 +174,32 @@ The network volume:
 - ✅ Prevents re-downloading the model on every cold start
 - ✅ Enables faster scaling and startup times
 
+## Use Cases
+
+1. **Image Editing** - Modify individual elements without affecting others
+2. **Background Removal** - Separate foreground and background layers
+3. **Object Manipulation** - Move, resize, or recolor specific objects
+4. **Creative Composition** - Rearrange layers for new compositions
+5. **Animation** - Use layers for frame-by-frame animation
+6. **Design Workflows** - Export to design tools with layer support
+
 ## Performance
 
 - **Cold Start**: ~60-120 seconds (model download on first run)
-- **Warm Inference**: ~20-40 seconds (depends on steps and resolution)
-- **Memory Usage**: ~50-60GB VRAM for 1024x1024 images (20B parameter model)
+- **Warm Inference**: ~30-60 seconds (depends on steps and layer count)
+- **Memory Usage**: ~50-70GB VRAM depending on resolution
 
 ## Tips for Best Results
 
-1. **Prompt Quality**: Be specific and descriptive
-2. **Steps**: 30-50 steps for good quality, 50-100 for best quality
-3. **CFG Scale**: 3.5-5.0 works well for most prompts
-4. **Text Rendering**: Qwen-Image excels at rendering text - great for logos, signs, and calligraphy
-5. **Seed**: Use the same seed to reproduce images
+1. **Resolution**: Use 640x640 for optimal quality/speed balance
+2. **Layer Count**: 3-5 layers work well for most images
+3. **Complex Images**: Use more layers (6-8) for complex scenes
+4. **Prompts**: Use prompts for guided decomposition when needed
+5. **Post-Processing**: Layers are RGBA - perfect for further editing
 
 ## License
 
-This endpoint uses the Qwen-Image model licensed under Apache 2.0. For more information, visit the [official Qwen-Image repository](https://github.com/QwenLM/Qwen-Image).
+This endpoint uses the Qwen-Image-Layered model. For licensing information, visit the [official Qwen-Image-Layered repository](https://huggingface.co/Qwen/Qwen-Image-Layered).
 
 ## Support
 
